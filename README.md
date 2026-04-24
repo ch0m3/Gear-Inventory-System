@@ -47,3 +47,12 @@ transactions.all_transactions  GET      /transactions/                  CM
 transactions.borrow_item       POST     /transactions/borrow            USER
 transactions.my_transactions   GET      /transactions/my                USER
 transactions.return_item       POST     /transactions/return            USER
+
+
+
+
+
+
+Jtw authorization
+User can login. 
+Role is required and is either CM or USER. 

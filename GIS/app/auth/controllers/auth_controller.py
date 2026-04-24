@@ -1,8 +1,7 @@
-from flask import request, session
+from flask import request
 from app.auth.models.user_model import create_user, find_user, count_cms
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.database import get_db
-from app.utils.auth_required import login_required, role_required
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 
 
 def register():
@@ -13,46 +12,66 @@ def register():
     password = generate_password_hash(data["password"])
     role = data.get("role", "USER")
 
-    if role == "CM" and count_cms()>=4:
-        return{"error": "Max CM reached"}, 400
-    
+    # Validate role
+    if role not in ["CM", "USER"]:
+        return {"error": "Invalid role"}, 400
+
+    # Enforce CM limit
+    if role == "CM" and count_cms() >= 4:
+        return {"error": "Max CM reached"}, 400
+
     user_id = create_user(name, email, password, role)
-    return{"message": "User created",
-           "data":{
-                "id": user_id,
-                "name": name,
-                "email": email,
-                "role": role
-           }}, 201
+
+    return {
+        "message": "User created",
+        "data": {
+            "id": user_id,
+            "name": name,
+            "email": email,
+            "role": role
+        }
+    }, 201
+
 
 def login():
     data = request.get_json()
+
     user = find_user(data["email"])
+
     if not user or not check_password_hash(user["password"], data["password"]):
         return {"error": "Invalid credentials"}, 401
-    
-    session["user_id"] = user["id"]
-    session["role"] = user["role"]
-    return {"message": "Logged in",
-            "data": {
-                "id": user["id"],
-                "name": user["name"],
-                "email": user["email"],
-                "role": user["role"]
-            }
-            }, 200
+
+    #JWT token
+    token = create_access_token(identity={
+        "id": user["id"],
+        "role": user["role"]
+    })
+
+    return {
+        "message": "Logged in",
+        "access_token": token,
+        "data": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "role": user["role"]
+        }
+    }, 200
 
 
-@login_required
-@role_required("CM")
-def get_users():
-    db= get_db()
+#current logged-in user
+@jwt_required()
+def get_me():
+    user = get_jwt_identity()
 
-    users = db.execute("SELECT id, name, email, role FROM users").fetchall()
-    return [dict(users) for users in users], 200
+    return {
+        "message": "Current user",
+        "data": user
+    }, 200
 
 
-
+# Logout is handled client-side 
 def logout():
-    session.clear()
-    return {"message": "Logged out"}, 200
+    return {
+        "message": "Logout successful (delete token on client)"
+    }, 200
